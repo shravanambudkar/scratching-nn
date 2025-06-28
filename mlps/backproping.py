@@ -7,9 +7,10 @@ class Value:
         self.data = data
         self.grad = 0.0
         self._backward = lambda: None
+        self._prev = set(_children)
     
     def __repr__(self) -> str:
-        return f'Value(data={self.data})'
+        return f'Value(data={self.data}, Child = {self._prev} , grad = {self.grad})'
     
     def __add__(self, other):
         other = Value(other) if not isinstance(other, Value) else other
@@ -58,22 +59,43 @@ class Value:
         return out
     
     def tanh(self):
-        out = Value(data=(math.exp(2*self.data)-1)/(math.exp(2*self.data)+1), _children = (self))
+        out = Value(data=(math.exp(2*self.data)-1)/(math.exp(2*self.data)+1), _children = (self,))
         def backward():
             self.grad += (1 - (out.data ** 2)) * out.grad
         out._backward = backward
         return out
     
     def sigmoid(self):
-        out = Value(data = 1/(1+math.exp(-1*self.data)), _children = (self))
+        out = Value(data = 1/(1+math.exp(-1*self.data)), _children = (self,))
         def backward():
             self.grad += (out.data * (1-out.data)) * out.grad
         out._backward = backward
         return out
     
+    def backprop(self):
+
+        # topological order all of the children in the graph
+        topo = []
+        visited = set()
+        def build_topo(v):
+            if v not in visited:
+                visited.add(v)
+                for child in v._prev:
+                    build_topo(child)
+                topo.append(v)
+        build_topo(self)
+
+        # go one variable at a time and apply the chain rule to get its gradient
+        self.grad = 1
+        for v in reversed(topo):
+            v._backward()
+    
         
-        
-a = Value(3.0)
-b = Value(2.0)
-c = b.sigmoid()
-print(c)
+
+if __name__ == '__main__':        
+    a = Value(3.0)
+    b = Value(2.0)
+    c = a*b
+    d = c.sigmoid()
+    c.backprop()
+    print(c)
